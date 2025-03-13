@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">ClipboardSync</string>
+    <string name="setting">Setting</string>
+    <string name="about">About</string>
+    <string name="connected">Connected</string>
+    <string name="connecting">Connecting</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="connection_failure">Connection failure</string>
+    <string name="mqtt_settings">MQTT Settings</string>
+    <string name="server_ip_host">Server ip/host</string>
+    <string name="port">Port</string>
+    <string name="enable_ssl">Enable SSL</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="topic">Topic</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="device_id">Device ID</string>
+    <string name="sync">Sync</string>
+    <string name="clipboard_content">Clipboard content</string>
+</resources>
