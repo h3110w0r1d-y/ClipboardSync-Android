@@ -1,4 +1,4 @@
-package com.h3110w0r1d.clipboardsync
+package com.h3110w0r1d.clipboardsync.entity
 
 import kotlinx.serialization.Serializable
 
