@@ -1,4 +1,4 @@
-package com.h3110w0r1d.clipboardsync
+package com.h3110w0r1d.clipboardsync.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -15,6 +15,11 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import com.h3110w0r1d.clipboardsync.R
+import com.h3110w0r1d.clipboardsync.activity.MainActivity
+import com.h3110w0r1d.clipboardsync.entity.HistoryItem
+import com.h3110w0r1d.clipboardsync.entity.MqttSetting
+import com.h3110w0r1d.clipboardsync.entity.SyncMessage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,7 +71,7 @@ class SyncService : LifecycleService() {
     private var mqttClient: MqttAsyncClient? = null
     private lateinit var clipboardManager: ClipboardManager
 
-    private var _config: MqttConfig = MqttConfig()
+    private var _config: MqttSetting = MqttSetting()
 
     inner class SyncBinder : Binder() {
         fun getDeviceId(): String = DEVICE_ID
@@ -74,7 +79,7 @@ class SyncService : LifecycleService() {
         fun syncClipboard() {
             _syncClipboard()
         }
-        fun startSync(config: MqttConfig) {
+        fun startSync(config: MqttSetting) {
             Log.d(TAG, "try Start sync")
             _startSync(config)
         }
@@ -101,7 +106,7 @@ class SyncService : LifecycleService() {
     }
 
 
-    private fun _startSync(config: MqttConfig) {
+    private fun _startSync(config: MqttSetting) {
         Log.d(TAG, "Service starting")
         updateStatus(SyncStatus.Connecting)
         _config = config
@@ -347,15 +352,6 @@ class SyncService : LifecycleService() {
         }
     }
 }
-
-data class MqttConfig(
-    val serverAddress: String = "",
-    val port: Int = 8883,
-    val enableSSL: Boolean = true,
-    val username: String = "",
-    val password: String = "",
-    val topic: String = "clipboard",
-)
 
 sealed class SyncStatus {
     object Disconnected : SyncStatus()

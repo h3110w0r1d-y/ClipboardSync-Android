@@ -1,4 +1,4 @@
-package com.h3110w0r1d.clipboardsync
+package com.h3110w0r1d.clipboardsync.viewmodel
 
 import android.content.ComponentName
 import android.content.Context
@@ -9,9 +9,12 @@ import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import com.ctrip.flight.mmkv.MMKV_KMP
-import com.ctrip.flight.mmkv.defaultMMKV
-import com.ctrip.flight.mmkv.initialize
+import com.h3110w0r1d.clipboardsync.entity.HistoryItem
+import com.h3110w0r1d.clipboardsync.entity.MqttSetting
+import com.h3110w0r1d.clipboardsync.service.SyncService
+import com.h3110w0r1d.clipboardsync.service.SyncStatus
+import com.h3110w0r1d.clipboardsync.ui.uistate.MqttSettingUIState
+import com.h3110w0r1d.clipboardsync.utils.MmkvUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -20,7 +23,6 @@ class ClipboardViewModel: ViewModel() {
     private val _isBound = mutableStateOf(false)
     val isBound: State<Boolean> = _isBound
     var serviceBinder: SyncService.SyncBinder? = null
-    private var kv: MMKV_KMP? = null
 
     // 同步服务状态
     private val _syncStatus = MutableStateFlow<SyncStatus>(SyncStatus.Disconnected)
@@ -39,8 +41,7 @@ class ClipboardViewModel: ViewModel() {
     val historyItems = _historyItems.asStateFlow()
 
     // 设置状态
-    private val _settingsState = MutableStateFlow(MqttSettingsState())
-    val settingsState = _settingsState.asStateFlow()
+    val mqttSettingUIState = MqttSettingUIState(MqttSetting())
 
     var serviceConnection = object : ServiceConnection{
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
@@ -60,24 +61,6 @@ class ClipboardViewModel: ViewModel() {
 
     fun updateSyncStatus(status: SyncStatus) {
         _syncStatus.value = status
-    }
-
-    init {
-        Log.d("ClipboardViewModel", "init")
-    }
-
-    fun initializeMMKV(context: Context) {
-        val rootDir = initialize(context)
-        Log.d("MMKV Path", rootDir)
-        kv = defaultMMKV()
-        _settingsState.value = MqttSettingsState(
-            serverAddress = kv!!.takeString("serverAddress"),
-            port = kv!!.takeString("port", 8883.toString()),
-            enableSSL = kv!!.takeBoolean("enableSSL", true),
-            username = kv!!.takeString("username"),
-            password = kv!!.takeString("password"),
-            topic = kv!!.takeString("topic", "clipboard"),
-        )
     }
 
     // 绑定服务
@@ -101,13 +84,13 @@ class ClipboardViewModel: ViewModel() {
         if (enabled) {
             Log.d("ClipboardViewModel", "startSync")
             Log.d("ClipboardViewModel", serviceConnection.toString())
-            serviceBinder?.startSync(MqttConfig(
-                serverAddress = settingsState.value.serverAddress,
-                port = settingsState.value.port.toIntOrNull() ?: 8883,
-                enableSSL = settingsState.value.enableSSL,
-                username = settingsState.value.username,
-                password = settingsState.value.password,
-                topic = settingsState.value.topic,
+            serviceBinder?.startSync(MqttSetting(
+                serverAddress = mqttSettingUIState.serverAddress.value,
+                port = mqttSettingUIState.port.value.toIntOrNull() ?: 8883,
+                enableSSL = mqttSettingUIState.enableSSL.value,
+                username = mqttSettingUIState.username.value,
+                password = mqttSettingUIState.password.value,
+                topic = mqttSettingUIState.topic.value,
             ))
         } else {
             Log.d("ClipboardViewModel", "stopSync")
@@ -115,26 +98,16 @@ class ClipboardViewModel: ViewModel() {
         }
     }
 
-    fun updateSettings(newSettings: MqttSettingsState) {
-        _settingsState.value = newSettings
-        kv?.set("serverAddress", newSettings.serverAddress)
-        kv?.set("port", newSettings.port)
-        kv?.set("enableSSL", newSettings.enableSSL)
-        kv?.set("username", newSettings.username)
-        kv?.set("password", newSettings.password)
-        kv?.set("topic", newSettings.topic)
-    }
-
     fun syncClipboardContent() {
         serviceBinder?.syncClipboard()
     }
-}
 
-data class MqttSettingsState(
-    val serverAddress: String = "",
-    val port: String = "8883",
-    val enableSSL: Boolean = true,
-    val username: String = "",
-    val password: String = "",
-    val topic: String = "clipboard",
-)
+    fun saveSetting(){
+        MmkvUtils["serverAddress"] = mqttSettingUIState.serverAddress.value
+        MmkvUtils["port"] = mqttSettingUIState.port.value
+        MmkvUtils["enableSSL"] = mqttSettingUIState.enableSSL.value
+        MmkvUtils["username"] = mqttSettingUIState.username.value
+        MmkvUtils["password"] = mqttSettingUIState.password.value
+        MmkvUtils["topic"] = mqttSettingUIState.topic.value
+    }
+}
