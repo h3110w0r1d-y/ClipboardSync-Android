@@ -9,5 +9,6 @@ class MqttSettingUIState(mqttSetting: MqttSetting) {
 	val enableSSL = mutableStateOf(mqttSetting.enableSSL)
 	val username = mutableStateOf(mqttSetting.username)
 	val password = mutableStateOf(mqttSetting.password)
+	val secretKey = mutableStateOf(mqttSetting.secretKey)
 	val topic = mutableStateOf(mqttSetting.topic)
 }

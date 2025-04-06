@@ -36,6 +36,12 @@ import org.eclipse.paho.mqttv5.common.MqttException
 import org.eclipse.paho.mqttv5.common.MqttMessage
 import org.eclipse.paho.mqttv5.common.MqttSubscription
 import org.eclipse.paho.mqttv5.common.packet.MqttProperties
+import java.security.MessageDigest
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
+import kotlin.experimental.xor
+
 
 class SyncService : LifecycleService() {
     companion object {
@@ -64,12 +70,14 @@ class SyncService : LifecycleService() {
 
     private val _syncHistory = MutableStateFlow<List<HistoryItem>>(emptyList())
     val syncHistory = _syncHistory.asStateFlow()
-    private fun updateStatus(history: List<HistoryItem>) {
+    private fun updateHistory(history: List<HistoryItem>) {
         lifecycleScope.launch { _syncHistory.emit(history) }
     }
 
     private var mqttClient: MqttAsyncClient? = null
     private lateinit var clipboardManager: ClipboardManager
+    private lateinit var secretKeySpec: SecretKeySpec
+    private lateinit var ivParameterSpec: IvParameterSpec
 
     private var _config: MqttSetting = MqttSetting()
 
@@ -80,7 +88,7 @@ class SyncService : LifecycleService() {
             _syncClipboard()
         }
         fun startSync(config: MqttSetting) {
-            Log.d(TAG, "try Start sync")
+            Log.d(TAG, "Start sync")
             _startSync(config)
         }
         fun stopSync() {
@@ -110,6 +118,17 @@ class SyncService : LifecycleService() {
         Log.d(TAG, "Service starting")
         updateStatus(SyncStatus.Connecting)
         _config = config
+
+        // 初始化密钥
+        val hash = MessageDigest.getInstance("SHA-256").digest(config.secretKey.toByteArray())
+        secretKeySpec = SecretKeySpec(hash, "AES")
+        val ivBytes = hash.copyOfRange(0, 16)
+        // xor ivBytes with the last 16 bytes of the hash
+        for (i in ivBytes.indices) {
+            ivBytes[i] = (ivBytes[i] xor hash[hash.size - 16 + i])
+        }
+        ivParameterSpec = IvParameterSpec(ivBytes)
+
         // MQTT连接逻辑
         connect()
         // Register the listener
@@ -148,6 +167,11 @@ class SyncService : LifecycleService() {
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
         // Clipboard content has changed
         val clipData = clipboardManager.primaryClip
+        if (clipData != null && clipData.itemCount > 0) {
+            val item: ClipData.Item = clipData.getItemAt(0)
+            updateClipboardContent(item.text.toString())
+        }
+
         if (lastTimestamp == (-1).toLong()) {
             lastTimestamp = clipData?.description?.timestamp ?: 0
             return@OnPrimaryClipChangedListener
@@ -166,12 +190,16 @@ class SyncService : LifecycleService() {
                 content = text.toString(),
                 timestamp = lastTimestamp
             )
-
             val message = json.encodeToString(SyncMessage.serializer(), syncMessage)
-            publish(message)
+            val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
+            cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, ivParameterSpec)
+            val encryptedMessage = cipher.doFinal(message.encodeToByteArray())
+
+            publish(encryptedMessage)
         }
     }
 
+    @OptIn(ExperimentalStdlibApi::class)
     private fun connect() {
         val persistence = MemoryPersistence()
         val scheme = if (_config.port == 8883) "ssl" else "tcp"
@@ -192,8 +220,11 @@ class SyncService : LifecycleService() {
                 if (message == null) {
                     return
                 }
-                Log.d(TAG, "Receive message: $message")
-                val syncMessage = json.decodeFromString<SyncMessage>(message.toString())
+                val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
+                cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivParameterSpec)
+                val messageData = cipher.doFinal(message.payload)
+
+                val syncMessage = json.decodeFromString<SyncMessage>(messageData.decodeToString())
                 Log.d(TAG, syncMessage.toString())
                 if (syncMessage.type == "text") {
                     val clipData = ClipData.newPlainText(null, syncMessage.content)
@@ -241,14 +272,14 @@ class SyncService : LifecycleService() {
         }
     }
 
-    private fun publish(msg: String, qos: Int = 1, retained: Boolean = false) {
+    private fun publish(msg: ByteArray, qos: Int = 1, retained: Boolean = false) {
         if (!mqttClient?.isConnected!!) {
             Log.d(TAG, "failed sync, not connected")
             return
         }
         try {
             val message = MqttMessage().apply {
-                payload = msg.toByteArray()
+                payload = msg
                 this.qos = qos
                 isRetained = retained
             }
@@ -348,7 +379,10 @@ class SyncService : LifecycleService() {
                 timestamp = lastTimestamp
             )
             val message = json.encodeToString(SyncMessage.serializer(), syncMessage)
-            publish(message)
+            val cipher = Cipher.getInstance("AES/CBC/PKCS7Padding")
+            cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, ivParameterSpec)
+            val encryptedMessage = cipher.doFinal(message.encodeToByteArray())
+            publish(encryptedMessage)
         }
     }
 }

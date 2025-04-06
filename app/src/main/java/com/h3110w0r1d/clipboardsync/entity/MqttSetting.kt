@@ -8,6 +8,7 @@ data class MqttSetting(
 	val enableSSL: Boolean = MmkvUtils["enableSSL", true],
 	val username: String = MmkvUtils["username", ""],
 	val password: String = MmkvUtils["password", ""],
+	val secretKey: String = MmkvUtils["secretKey", ""],
 	val topic: String = MmkvUtils["topic", "clipboard"],
 )
 

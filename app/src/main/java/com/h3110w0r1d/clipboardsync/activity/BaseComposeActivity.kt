@@ -57,10 +57,8 @@ abstract class BaseComposeActivity: ComponentActivity() {
 				if(grantResults[i] == PackageManager.PERMISSION_GRANTED) {
 					onPermissionGranted(permissions[i])
 				} else {
-					if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-						if(!shouldShowRequestPermissionRationale(permissions[i])) {
-							shouldShowRequest = false
-						}
+					if(!shouldShowRequestPermissionRationale(permissions[i])) {
+						shouldShowRequest = false
 					}
 					deniedPermissions.add(permissions[i])
 				}

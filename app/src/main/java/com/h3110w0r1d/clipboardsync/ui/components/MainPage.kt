@@ -11,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -425,6 +427,16 @@ fun SettingsDialog(
 				)
 
 				OutlinedTextField(
+					value = uiState.secretKey.value,
+					onValueChange = { uiState.secretKey.value = it },
+					label = { Text(stringResource(R.string.secretKey)) },
+					visualTransformation = PasswordVisualTransformation(),
+					modifier = Modifier
+						.fillMaxWidth()
+						.padding(vertical = 8.dp)
+				)
+
+				OutlinedTextField(
 					value = uiState.topic.value,
 					onValueChange = { uiState.topic.value = it },
 					label = { Text(stringResource(R.string.topic)) },
@@ -458,6 +470,7 @@ fun SettingsDialog(
 	}
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InfoDialog(
 	onDismiss: () -> Unit,
@@ -537,22 +550,40 @@ fun InfoDialog(
 
 				Spacer(modifier = Modifier.height(4.dp))
 
-				// GitHub 链接
-				Text(
-					text = "@h3110w0r1d-y", // 替换你的 GitHub 地址
-					style = MaterialTheme.typography.bodyMedium,
-					color = MaterialTheme.colorScheme.primary,
-					modifier = Modifier
-						.clickable {
-							// 打开 GitHub 链接
-							val intent = Intent(
-								Intent.ACTION_VIEW,
-								"https://github.com/h3110w0r1d-y".toUri()
-							)
-							context.startActivity(intent)
-						}
-						.padding(8.dp)
-				)
+				FlowRow(
+					horizontalArrangement = Arrangement.Center
+				) {
+					Text(
+						text = "@h3110w0r1d-y",
+						style = MaterialTheme.typography.bodyMedium,
+						color = MaterialTheme.colorScheme.primary,
+						modifier = Modifier
+							.clickable {
+								// 打开 GitHub 链接
+								val intent = Intent(
+									Intent.ACTION_VIEW,
+									"https://github.com/h3110w0r1d-y".toUri()
+								)
+								context.startActivity(intent)
+							}
+							.padding(4.dp)
+					)
+					Text(
+						text = "@2891954521",
+						style = MaterialTheme.typography.bodyMedium,
+						color = MaterialTheme.colorScheme.primary,
+						modifier = Modifier
+							.clickable {
+								// 打开 GitHub 链接
+								val intent = Intent(
+									Intent.ACTION_VIEW,
+									"https://github.com/2891954521".toUri()
+								)
+								context.startActivity(intent)
+							}
+							.padding(4.dp)
+					)
+				}
 			}
 		}
 	}

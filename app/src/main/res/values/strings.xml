@@ -18,4 +18,5 @@
     <string name="device_id">Device ID</string>
     <string name="sync">Sync</string>
     <string name="clipboard_content">Clipboard content</string>
+    <string name="secretKey">Encrypt Key</string>
 </resources>

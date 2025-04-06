@@ -90,6 +90,7 @@ class ClipboardViewModel: ViewModel() {
                 enableSSL = mqttSettingUIState.enableSSL.value,
                 username = mqttSettingUIState.username.value,
                 password = mqttSettingUIState.password.value,
+                secretKey = mqttSettingUIState.secretKey.value,
                 topic = mqttSettingUIState.topic.value,
             ))
         } else {
@@ -104,10 +105,11 @@ class ClipboardViewModel: ViewModel() {
 
     fun saveSetting(){
         MmkvUtils["serverAddress"] = mqttSettingUIState.serverAddress.value
-        MmkvUtils["port"] = mqttSettingUIState.port.value
+        MmkvUtils["port"] = mqttSettingUIState.port.value.toIntOrNull() ?: 8883
         MmkvUtils["enableSSL"] = mqttSettingUIState.enableSSL.value
         MmkvUtils["username"] = mqttSettingUIState.username.value
         MmkvUtils["password"] = mqttSettingUIState.password.value
+        MmkvUtils["secretKey"] = mqttSettingUIState.secretKey.value
         MmkvUtils["topic"] = mqttSettingUIState.topic.value
     }
 }
