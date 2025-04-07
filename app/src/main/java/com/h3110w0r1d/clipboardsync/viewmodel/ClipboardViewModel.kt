@@ -83,16 +83,8 @@ class ClipboardViewModel: ViewModel() {
         Log.d("ClipboardViewModel", "toggleSync")
         if (enabled) {
             Log.d("ClipboardViewModel", "startSync")
-            Log.d("ClipboardViewModel", serviceConnection.toString())
-            serviceBinder?.startSync(MqttSetting(
-                serverAddress = mqttSettingUIState.serverAddress.value,
-                port = mqttSettingUIState.port.value.toIntOrNull() ?: 8883,
-                enableSSL = mqttSettingUIState.enableSSL.value,
-                username = mqttSettingUIState.username.value,
-                password = mqttSettingUIState.password.value,
-                secretKey = mqttSettingUIState.secretKey.value,
-                topic = mqttSettingUIState.topic.value,
-            ))
+            saveSetting()
+            serviceBinder?.startSync()
         } else {
             Log.d("ClipboardViewModel", "stopSync")
             serviceBinder?.stopSync()

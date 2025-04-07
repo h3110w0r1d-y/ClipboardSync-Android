@@ -11,4 +11,3 @@ data class MqttSetting(
 	val secretKey: String = MmkvUtils["secretKey", ""],
 	val topic: String = MmkvUtils["topic", "clipboard"],
 )
-

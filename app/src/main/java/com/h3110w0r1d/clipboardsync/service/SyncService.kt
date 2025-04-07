@@ -11,10 +11,15 @@ import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.IBinder
 import android.provider.Settings
+import android.service.quicksettings.Tile
+import android.service.quicksettings.TileService
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import androidx.lifecycle.LifecycleService
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleCoroutineScope
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ServiceLifecycleDispatcher
+import androidx.lifecycle.coroutineScope
 import com.h3110w0r1d.clipboardsync.R
 import com.h3110w0r1d.clipboardsync.activity.MainActivity
 import com.h3110w0r1d.clipboardsync.entity.HistoryItem
@@ -43,7 +48,13 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.experimental.xor
 
 
-class SyncService : LifecycleService() {
+class SyncService : TileService(), LifecycleOwner {
+    private val dispatcher = ServiceLifecycleDispatcher(this)
+    override val  lifecycle: Lifecycle
+        get() = dispatcher.lifecycle
+    private val LifecycleOwner.lifecycleScope: LifecycleCoroutineScope
+        get() = lifecycle.coroutineScope
+
     companion object {
         const val ACTION_STOP_SERVICE =
             "com.h3110w0r1d.clipboardsync.ACTION_STOP_SERVICE" // 停止服务的 Action
@@ -65,6 +76,12 @@ class SyncService : LifecycleService() {
     private val _syncStatus = MutableStateFlow<SyncStatus>(SyncStatus.Disconnected)
     val syncStatus = _syncStatus.asStateFlow()
     private fun updateStatus(status: SyncStatus) {
+        if (status is SyncStatus.Connected) {
+            qsTile.state = Tile.STATE_ACTIVE
+        } else {
+            qsTile.state = Tile.STATE_INACTIVE
+        }
+        qsTile.updateTile()
         lifecycleScope.launch { _syncStatus.emit(status) }
     }
 
@@ -79,7 +96,10 @@ class SyncService : LifecycleService() {
     private lateinit var secretKeySpec: SecretKeySpec
     private lateinit var ivParameterSpec: IvParameterSpec
 
-    private var _config: MqttSetting = MqttSetting()
+    private var config: MqttSetting = MqttSetting()
+
+    private var lastTimestamp: Long = 0
+    val json = Json { ignoreUnknownKeys = true }
 
     inner class SyncBinder : Binder() {
         fun getDeviceId(): String = DEVICE_ID
@@ -87,24 +107,27 @@ class SyncService : LifecycleService() {
         fun syncClipboard() {
             _syncClipboard()
         }
-        fun startSync(config: MqttSetting) {
-            Log.d(TAG, "Start sync")
-            _startSync(config)
+        fun startSync() {
+            _startSync()
         }
         fun stopSync() {
             _stopSync()
         }
     }
 
-    override fun onBind(intent: Intent): IBinder {
-        super.onBind(intent)
-        return binder
+    override fun onBind(intent: Intent): IBinder? {
+        dispatcher.onServicePreSuperOnBind()
+        Log.d(TAG, "Service bound")
+        Log.d(TAG, "Intent action: ${intent.action}")
+        if (intent.action == null) {
+            return binder
+        }
+        return super.onBind(intent)
+//        return binder
     }
 
-    private var lastTimestamp: Long = 0
-    val json = Json { ignoreUnknownKeys = true }
-
     override fun onCreate() {
+        dispatcher.onServicePreSuperOnCreate()
         super.onCreate()
         DEVICE_ID = Settings.System.getString(contentResolver, Settings.Secure.ANDROID_ID)
         // Get the ClipboardManager
@@ -113,11 +136,75 @@ class SyncService : LifecycleService() {
         createNotificationChannel()
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        // 处理停止服务的意图
+        if (intent?.action == ACTION_STOP_SERVICE) {
+            Log.d(TAG, "Stopping service from notification")
+            _stopSync()
+        }
+        return START_STICKY
+    }
 
-    private fun _startSync(config: MqttSetting) {
+    override fun onStartListening() {
+        super.onStartListening()
+        Log.d(TAG, "Tile is listening")
+        // Update the tile state
+        if (syncStatus.value is SyncStatus.Connected) {
+            qsTile.state = Tile.STATE_ACTIVE
+        } else {
+            qsTile.state = Tile.STATE_INACTIVE
+        }
+        qsTile.updateTile()
+    }
+
+    override fun onStopListening() {
+        super.onStopListening()
+        if (syncStatus.value is SyncStatus.Connected) {
+            qsTile.state = Tile.STATE_ACTIVE
+        } else {
+            qsTile.state = Tile.STATE_INACTIVE
+        }
+        qsTile.updateTile()
+    }
+
+    override fun onDestroy() {
+        dispatcher.onServicePreSuperOnDestroy()
+        _stopSync()
+        super.onDestroy()
+        Log.d(TAG, "Service destroyed")
+    }
+
+    override fun onClick() {
+        if (!isLocked) {
+            Log.d(TAG, "Tile clicked")
+            // Toggle the sync status
+            if (syncStatus.value is SyncStatus.Connected) {
+                Log.d(TAG, "Stopping sync")
+                _stopSync()
+            } else {
+                _startSync()
+                Log.d(TAG, "Starting sync")
+            }
+        } else {
+            unlockAndRun {
+                Log.d(TAG, "Tile clicked and unlocked")
+                // Toggle the sync status
+                if (syncStatus.value is SyncStatus.Connected) {
+                    Log.d(TAG, "Stopping sync")
+                    _stopSync()
+                } else {
+                    _startSync()
+                    Log.d(TAG, "Starting sync")
+                }
+            }
+        }
+    }
+
+    private fun _startSync() {
         Log.d(TAG, "Service starting")
         updateStatus(SyncStatus.Connecting)
-        _config = config
+        config = MqttSetting()
 
         // 初始化密钥
         val hash = MessageDigest.getInstance("SHA-256").digest(config.secretKey.toByteArray())
@@ -152,16 +239,6 @@ class SyncService : LifecycleService() {
         disconnect()
         // 停止前台服务
         stopForeground(STOP_FOREGROUND_REMOVE)
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        super.onStartCommand(intent, flags, startId)
-        // 处理停止服务的意图
-        if (intent?.action == ACTION_STOP_SERVICE) {
-            Log.d(TAG, "Stopping service from notification")
-            _stopSync()
-        }
-        return START_STICKY
     }
 
     private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener {
@@ -199,12 +276,11 @@ class SyncService : LifecycleService() {
         }
     }
 
-    @OptIn(ExperimentalStdlibApi::class)
     private fun connect() {
         val persistence = MemoryPersistence()
-        val scheme = if (_config.port == 8883) "ssl" else "tcp"
-        mqttClient = MqttAsyncClient("$scheme://${_config.serverAddress}", DEVICE_ID, persistence)
-        mqttClient!!.setCallback(object : MqttCallback {
+        val scheme = if (config.enableSSL) "ssl" else "tcp"
+        mqttClient = MqttAsyncClient("$scheme://${config.serverAddress}", DEVICE_ID, persistence)
+        mqttClient?.setCallback(object : MqttCallback {
             override fun disconnected(disconnectResponse: MqttDisconnectResponse?) {
                 Log.d(TAG, "Disconnected")
                 updateStatus(SyncStatus.Disconnected)
@@ -248,14 +324,14 @@ class SyncService : LifecycleService() {
             }
         })
         val options = MqttConnectionOptions().apply {
-            password = _config.password.toByteArray()
-            userName = _config.username
+            password = config.password.toByteArray()
+            userName = config.username
             maxReconnectDelay = 2000
             isAutomaticReconnect = true
             isCleanStart = true
         }
         try {
-            mqttClient!!.connect(options, null, object : MqttActionListener {
+            mqttClient?.connect(options, null, object : MqttActionListener {
                 override fun onSuccess(asyncActionToken: IMqttToken?) {
                     Log.d(TAG, "Connection success")
                     subscribe()
@@ -268,12 +344,14 @@ class SyncService : LifecycleService() {
                 }
             })
         } catch (e: MqttException) {
-            e.printStackTrace()
+            Log.d(TAG, "Connection failure")
+            Log.d(TAG, e.toString())
+            updateStatus(SyncStatus.Error(e.toString()))
         }
     }
 
     private fun publish(msg: ByteArray, qos: Int = 1, retained: Boolean = false) {
-        if (!mqttClient?.isConnected!!) {
+        if (mqttClient?.isConnected != true) {
             Log.d(TAG, "failed sync, not connected")
             return
         }
@@ -284,7 +362,7 @@ class SyncService : LifecycleService() {
                 isRetained = retained
             }
 
-            mqttClient!!.publish(_config.topic, message)
+            mqttClient?.publish(config.topic, message)
         } catch (e: MqttException) {
             e.printStackTrace()
         }
@@ -292,7 +370,7 @@ class SyncService : LifecycleService() {
 
     private fun disconnect() {
         try {
-            mqttClient!!.disconnect(null, object : MqttActionListener {
+            mqttClient?.disconnect(null, object : MqttActionListener {
                 override fun onSuccess(asyncActionToken: IMqttToken?) {
                     Log.d(TAG, "Disconnected")
                     updateStatus(SyncStatus.Disconnected)
@@ -309,19 +387,13 @@ class SyncService : LifecycleService() {
 
     private fun subscribe() {
         try {
-            val mqttSubscription = MqttSubscription(_config.topic, 1).apply {
+            val mqttSubscription = MqttSubscription(config.topic, 1).apply {
                 isNoLocal = true
             }
-            mqttClient!!.subscribe(mqttSubscription)
+            mqttClient?.subscribe(mqttSubscription)
         } catch (e: MqttException) {
             e.printStackTrace()
         }
-    }
-
-    override fun onDestroy() {
-        _stopSync()
-        super.onDestroy()
-        Log.d(TAG, "Service destroyed")
     }
 
     private fun createNotificationChannel() {
