@@ -77,11 +77,11 @@ class SyncService : TileService(), LifecycleOwner {
     val syncStatus = _syncStatus.asStateFlow()
     private fun updateStatus(status: SyncStatus) {
         if (status is SyncStatus.Connected) {
-            qsTile.state = Tile.STATE_ACTIVE
+            qsTile?.state = Tile.STATE_ACTIVE
         } else {
-            qsTile.state = Tile.STATE_INACTIVE
+            qsTile?.state = Tile.STATE_INACTIVE
         }
-        qsTile.updateTile()
+        qsTile?.updateTile()
         lifecycleScope.launch { _syncStatus.emit(status) }
     }
 
@@ -151,21 +151,21 @@ class SyncService : TileService(), LifecycleOwner {
         Log.d(TAG, "Tile is listening")
         // Update the tile state
         if (syncStatus.value is SyncStatus.Connected) {
-            qsTile.state = Tile.STATE_ACTIVE
+            qsTile?.state = Tile.STATE_ACTIVE
         } else {
-            qsTile.state = Tile.STATE_INACTIVE
+            qsTile?.state = Tile.STATE_INACTIVE
         }
-        qsTile.updateTile()
+        qsTile?.updateTile()
     }
 
     override fun onStopListening() {
         super.onStopListening()
         if (syncStatus.value is SyncStatus.Connected) {
-            qsTile.state = Tile.STATE_ACTIVE
+            qsTile?.state = Tile.STATE_ACTIVE
         } else {
-            qsTile.state = Tile.STATE_INACTIVE
+            qsTile?.state = Tile.STATE_INACTIVE
         }
-        qsTile.updateTile()
+        qsTile?.updateTile()
     }
 
     override fun onDestroy() {
@@ -173,6 +173,8 @@ class SyncService : TileService(), LifecycleOwner {
         _stopSync()
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
+        qsTile?.state = Tile.STATE_INACTIVE
+        qsTile?.updateTile()
     }
 
     override fun onClick() {
