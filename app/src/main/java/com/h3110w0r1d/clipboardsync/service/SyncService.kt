@@ -228,7 +228,7 @@ class SyncService : TileService(), LifecycleOwner {
         startForeground(
             NOTIFICATION_ID,
             notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         )
         Log.d(TAG, "Service started")
     }
@@ -433,7 +433,7 @@ class SyncService : TileService(), LifecycleOwner {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Sync Service")
             .setContentText("Service is running in the background")
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // 替换为你的图标
+            .setSmallIcon(R.drawable.small_icon) // 替换为你的图标
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             // 添加停止服务的 Action
