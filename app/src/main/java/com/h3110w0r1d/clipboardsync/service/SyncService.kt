@@ -57,6 +57,7 @@ class SyncService : TileService(), LifecycleOwner {
         fun syncClipboard() = syncClipboardContent()
         fun startSync() = startSyncService()
         fun stopSync() = stopSyncService()
+        fun getStatus(): SyncStatus = syncStatus.value
     }
 
     override fun onBind(intent: Intent): IBinder? {
@@ -99,7 +100,7 @@ class SyncService : TileService(), LifecycleOwner {
             if (Backend.isMqttInitialized() && mqttClient.isConnected) {
                 SyncStatus.Connected
             } else {
-                SyncStatus.Disconnected
+                _syncStatus.value
             }
         )
     }

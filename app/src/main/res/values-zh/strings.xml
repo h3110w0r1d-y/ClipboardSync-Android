@@ -20,4 +20,6 @@
     <string name="sync">同步</string>
     <string name="clipboard_content">剪贴板内容</string>
     <string name="secretKey">加密密钥</string>
+    <string name="module_activated">模块已激活</string>
+    <string name="module_inactivated">模块未激活</string>
 </resources>

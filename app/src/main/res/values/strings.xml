@@ -19,4 +19,6 @@
     <string name="sync">Sync</string>
     <string name="clipboard_content">Clipboard content</string>
     <string name="secretKey">Encrypt Key</string>
+    <string name="module_activated">Module activated</string>
+    <string name="module_inactivated">Module inactivated</string>
 </resources>

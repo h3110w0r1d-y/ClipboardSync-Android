@@ -3,13 +3,13 @@ package com.h3110w0r1d.clipboardsync.viewmodel
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.Intent.ACTION_MAIN
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import com.h3110w0r1d.clipboardsync.entity.HistoryItem
 import com.h3110w0r1d.clipboardsync.entity.MqttSetting
 import com.h3110w0r1d.clipboardsync.service.SyncService
 import com.h3110w0r1d.clipboardsync.service.SyncStatus
@@ -35,10 +35,6 @@ class ClipboardViewModel: ViewModel() {
     // 当前剪贴板内容
     private val _clipboardContent = MutableStateFlow("")
     val clipboardContent = _clipboardContent.asStateFlow()
-
-    // UI状态
-    private val _historyItems = MutableStateFlow<List<HistoryItem>>(emptyList())
-    val historyItems = _historyItems.asStateFlow()
 
     // 设置状态
     val mqttSettingUIState = MqttSettingUIState(MqttSetting())
@@ -79,16 +75,30 @@ class ClipboardViewModel: ViewModel() {
     }
 
     // UI事件处理
-    fun toggleSync(enabled: Boolean) {
+    fun toggleSync() {
         Log.d("ClipboardViewModel", "toggleSync")
-        if (enabled) {
-            Log.d("ClipboardViewModel", "startSync")
+        if (serviceBinder?.getStatus() == SyncStatus.Disconnected || serviceBinder?.getStatus() is SyncStatus.Error) {
             saveSetting()
             serviceBinder?.startSync()
         } else {
-            Log.d("ClipboardViewModel", "stopSync")
             serviceBinder?.stopSync()
         }
+    }
+
+    fun openLsposedManager(context: Context) {
+        val packageManager = context.packageManager
+        try {
+            packageManager.getPackageInfo("org.lsposed.manager", 0)
+        } catch (e: Exception) {
+            return
+        }
+        val intent = Intent(ACTION_MAIN)
+        intent.addCategory(Intent.CATEGORY_LAUNCHER)
+        intent.setComponent(ComponentName(
+            "org.lsposed.manager",
+            "org.lsposed.manager.ui.activity.MainActivity"
+        ))
+        context.startActivity(intent)
     }
 
     fun syncClipboardContent() {
