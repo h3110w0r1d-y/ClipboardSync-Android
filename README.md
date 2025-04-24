@@ -2,7 +2,8 @@
 
 Clipboard Sync 是一款支持 Android 和 macOS 平台的剪贴板同步工具，通过 **MQTT协议** 进行数据传输，并采用 **AES-256-CBC** 加密，确保数据传输的安全性。
 
-> ⚠️ **注意**：本软件同时也是 Xposed 插件，主要为了解除 Android 10 开始的对后台应用读取剪贴板权限的限制，故仅支持 **Android 10 及以上版本**，同时也借助Xposed做了保活，不需要常驻通知栏，具体代码请查看Hook类。
+> ⚠️ **注意**：本软件同时也是 Xposed 插件，主要为了解除 Android 10 开始的对后台应用读取剪贴板权限的限制，故仅支持 **Android 10 及以上版本**；
+> 同时也借助Xposed做了保活，不需要常驻通知栏，具体代码请查看[Hook](https://github.com/h3110w0r1d-y/ClipboardSync-Android/blob/master/app/src/main/java/com/h3110w0r1d/clipboardsync/Hook.kt)类。
 
 ## 功能特性
 
