@@ -1,39 +1,39 @@
-package com.h3110w0r1d.clipboardsync;
+package com.h3110w0r1d.clipboardsync
 
 import android.os.Build
 import android.util.Log
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
-import de.robv.android.xposed.callbacks.XC_LoadPackage
+import de.robv.android.xposed.XposedBridge.hookAllMethods
+import de.robv.android.xposed.XposedHelpers.findClass
+import de.robv.android.xposed.XposedHelpers.callMethod
+import de.robv.android.xposed.XposedHelpers.findAndHookMethod
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam
 
 
-class ClipboardHook : IXposedHookLoadPackage {
-    var LOG_TAG: String = "=== ClipboardService Hook ==="
-    var whitePackageName: String = "com.h3110w0r1d.clipboardsync"
+class Hook : IXposedHookLoadPackage {
+    companion object {
+        const val LOG_TAG = "ClipboardSyncHook"
+        const val PACKAGE_NAME = "com.h3110w0r1d.clipboardsync"
+    }
 
-    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
+    override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName != "android") {
             return
         }
-        XposedBridge.log(LOG_TAG + " - Loaded app: " + lpparam.packageName)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             hook34(lpparam)
         } else {
             hook(lpparam)
         }
-
-//        hookams(lpparam)
+        hookams(lpparam)
     }
 
     private fun hookams(lpparam: LoadPackageParam) {
-        val clazz =
-            XposedHelpers.findClass("com.android.server.am.ProcessList", lpparam.classLoader)
+        val clazz = findClass("com.android.server.am.ProcessList", lpparam.classLoader)
         Log.d(LOG_TAG, "hookams: find class$clazz")
 
-        XposedBridge.hookAllMethods(
+        hookAllMethods(
             clazz,
             "newProcessRecordLocked",
             object : XC_MethodHook() {
@@ -41,7 +41,7 @@ class ClipboardHook : IXposedHookLoadPackage {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     super.afterHookedMethod(param)
                     try {
-                        changeAppInfoForLockPackage(param.result, -1)
+                        changeAppInfoForLockPackage(param.result)
                     }catch (e:Throwable){
                         Log.e(LOG_TAG, "newProcessRecordLocked" + e.stackTraceToString())
                     }
@@ -50,28 +50,24 @@ class ClipboardHook : IXposedHookLoadPackage {
             })
     }
 
-    private fun changeAppInfoForLockPackage(processRecord: Any, oomAdjValue:Int) {
+    private fun changeAppInfoForLockPackage(processRecord: Any) {
         if (processRecord.toString().contains("system")) return
         try {
             val processName = processRecord.get<String>("processName")
-            if (processName != whitePackageName) return
-            Log.d(LOG_TAG, "processName: $processName")
+            if (processName != PACKAGE_NAME) return
             val mState = processRecord.get<Any>("mState")
-            Log.d(LOG_TAG, "mState: $mState")
-            XposedHelpers.callMethod(mState, "setMaxAdj", 0)
-            XposedHelpers.callMethod(mState, "setSetAdj", 0)
-//            processRecord.call<Unit>("setPersistent", true)
+            callMethod(mState, "setMaxAdj", 0)
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Failed to access mState field", e)
         }
     }
 
     private fun hook34(lpparam: LoadPackageParam) {
-        val clazz = XposedHelpers.findClass(
+        val clazz = findClass(
             "com.android.server.clipboard.ClipboardService",
             lpparam.classLoader
         )
-        XposedHelpers.findAndHookMethod(
+        findAndHookMethod(
             clazz,
             "clipboardAccessAllowed",
             Int::class.javaPrimitiveType,
@@ -85,7 +81,7 @@ class ClipboardHook : IXposedHookLoadPackage {
                 @Throws(Throwable::class)
                 override fun afterHookedMethod(param: MethodHookParam) {
                     super.afterHookedMethod(param)
-                    if (whitePackageName == param.args[1]) {
+                    if (PACKAGE_NAME == param.args[1]) {
                         param.result = true
                     }
                 }
@@ -93,11 +89,11 @@ class ClipboardHook : IXposedHookLoadPackage {
     }
 
     private fun hook(lpparam: LoadPackageParam) {
-        val clazz = XposedHelpers.findClass(
+        val clazz = findClass(
             "com.android.server.clipboard.ClipboardService",
             lpparam.classLoader
         )
-        XposedHelpers.findAndHookMethod(
+        findAndHookMethod(
             clazz,
             "clipboardAccessAllowed",
             Int::class.javaPrimitiveType,
@@ -110,7 +106,7 @@ class ClipboardHook : IXposedHookLoadPackage {
                 @Throws(Throwable::class)
                 override fun afterHookedMethod(param: MethodHookParam) {
                     super.afterHookedMethod(param)
-                    if (whitePackageName == param.args[1]) {
+                    if (PACKAGE_NAME == param.args[1]) {
                         param.result = true
                     }
                 }
@@ -126,27 +122,6 @@ inline fun <reified T> Any.get(field: String): T? {
         val declaredField = clazz.getDeclaredField(field)
         declaredField.isAccessible = true // 设置可访问
         declaredField.get(this) as T // 读取字段值并强制转换为 T
-    } catch (e: Exception) {
-        // 捕获异常并返回 null
-        e.printStackTrace()
-        null
-    }
-}
-
-inline fun <reified T> Any.call(method: String, vararg params: Any?): T? {
-    return try {
-        // 获取对象的 Class 对象
-        val clazz = this.javaClass
-
-        // 获取方法的参数类型数组
-        val paramTypes = params.map { it?.javaClass }.toTypedArray()
-
-        // 获取方法对象（匹配方法名和参数类型）
-        val declaredMethod = clazz.getDeclaredMethod(method, *paramTypes)
-        declaredMethod.isAccessible = true // 设置方法为可访问
-
-        // 调用方法并返回结果
-        declaredMethod.invoke(this, *params) as T
     } catch (e: Exception) {
         // 捕获异常并返回 null
         e.printStackTrace()
