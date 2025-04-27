@@ -21,4 +21,7 @@
     <string name="secretKey">Encrypt Key</string>
     <string name="module_activated">Module activated</string>
     <string name="module_inactivated">Module inactivated</string>
+    <string name="please_restart_system">Please reboot your system for the module to take effect</string>
+    <string name="lsposed_manager_not_install">LSPosed Manager is not installed</string>
+    <string name="please_complete_configuration">Please complete the configuration</string>
 </resources>

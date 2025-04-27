@@ -15,8 +15,6 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     splits {
@@ -57,13 +55,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.activity.compose)
-//    implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
-//    implementation(libs.androidx.ui.tooling.preview)
 
     implementation(libs.mmkv)
     implementation(libs.kotlinx.serialization.json)
@@ -72,13 +67,4 @@ dependencies {
     implementation(platform(libs.androidx.compose.bom))
 
     compileOnly(files("libs/api-82.jar"))
-
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
 }

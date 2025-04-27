@@ -26,6 +26,7 @@ object Backend {
     private const val SENTINEL_TIMESTAMP = -1L
     private const val DEFAULT_QOS = 1
     private const val RECONNECT_DELAY_MS = 2000
+    private var clipboardContent = ""
 
     var lastTimestamp: Long = 0
     var deviceId: String = "android"
@@ -46,6 +47,12 @@ object Backend {
     private fun handleClipboardChange() {
         val clipData = clipboardManager.primaryClip ?: return
 
+        if (clipData.itemCount > 0) {
+            val item: ClipData.Item = clipData.getItemAt(0)
+            clipboardContent = item.text?.toString() ?: return
+            Log.d(TAG, "Clipboard update: $clipboardContent")
+            syncService?.updateClipboardContent(clipboardContent)
+        }
         if (lastTimestamp == SENTINEL_TIMESTAMP) {
             lastTimestamp = clipData.description?.timestamp ?: 0
             return
@@ -91,20 +98,18 @@ object Backend {
         try {
             mqttClient.disconnect(null, object : MqttActionListener {
                 override fun onSuccess(asyncActionToken: IMqttToken?) {
-                    Log.d(TAG, "MQTT连接已断开")
+                    Log.d(TAG, "MQTT主动断开")
                     syncService?.updateStatus(SyncStatus.Disconnected)
                 }
 
                 override fun onFailure(asyncActionToken: IMqttToken?, exception: Throwable?) {
-                    Log.e(TAG, "MQTT断开连接失败", exception)
+                    Log.e(TAG, "MQTT主动断开失败", exception)
                     syncService?.updateStatus(SyncStatus.Disconnected)
                 }
             })
             mqttClient.close(true)
         } catch (e: MqttException) {
-            Log.e(TAG, "断开MQTT连接时发生异常", e)
-        } finally {
-            syncService?.updateStatus(SyncStatus.Disconnected)
+            Log.e(TAG, "主动断开MQTT连接时发生异常", e)
         }
     }
 
@@ -149,7 +154,7 @@ object Backend {
     private fun setupMqttCallbacks() {
         mqttClient.setCallback(object : MqttCallback {
             override fun disconnected(disconnectResponse: MqttDisconnectResponse?) {
-                Log.d(TAG, "MQTT连接断开: ${disconnectResponse?.reasonString}")
+                Log.d(TAG, "MQTT连接以外断开: ${disconnectResponse?.reasonString}")
                 syncService?.updateStatus(SyncStatus.Connecting)
             }
 

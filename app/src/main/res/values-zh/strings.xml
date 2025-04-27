@@ -22,4 +22,7 @@
     <string name="secretKey">加密密钥</string>
     <string name="module_activated">模块已激活</string>
     <string name="module_inactivated">模块未激活</string>
+    <string name="please_restart_system">请重启系统使模块生效</string>
+    <string name="lsposed_manager_not_install">LSPosed 管理器未安装</string>
+    <string name="please_complete_configuration">请完善配置信息</string>
 </resources>

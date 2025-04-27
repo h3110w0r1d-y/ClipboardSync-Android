@@ -48,7 +48,7 @@
             android:value="true" />
         <meta-data
             android:name="xposeddescription"
-            android:value="允许后台读取剪贴板并保活" />
+            android:value="允许本应用后台读取剪贴板并保活" />
         <meta-data
             android:name="xposedminversion"
             android:value="82" />

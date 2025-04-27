@@ -8,11 +8,13 @@ import android.provider.Settings
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleCoroutineScope
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ServiceLifecycleDispatcher
 import androidx.lifecycle.coroutineScope
+import com.h3110w0r1d.clipboardsync.R
 import com.h3110w0r1d.clipboardsync.entity.MqttSetting
 import com.h3110w0r1d.clipboardsync.entity.SyncMessage
 import com.h3110w0r1d.clipboardsync.service.Backend.clipboardListener
@@ -49,15 +51,22 @@ class SyncService : TileService(), LifecycleOwner {
     private val _syncStatus = MutableStateFlow<SyncStatus>(SyncStatus.Disconnected)
     val syncStatus = _syncStatus.asStateFlow()
 
+    private val _clipboardContent = MutableStateFlow("")
+    val clipboardContent = _clipboardContent.asStateFlow()
+
     private val jsonProcessor = Json { ignoreUnknownKeys = true }
 
     inner class SyncBinder : Binder() {
         fun getDeviceId(): String = Backend.deviceId
         fun getStatusFlow(): Flow<SyncStatus> = syncStatus
+        fun getClipboardContent(): Flow<String> = clipboardContent
         fun syncClipboard() = syncClipboardContent()
-        fun startSync() = startSyncService()
-        fun stopSync() = stopSyncService()
-        fun getStatus(): SyncStatus = syncStatus.value
+        fun toggleSync(): Boolean = toggleSyncStatus()
+    }
+
+    fun updateClipboardContent(text: String) {
+        Log.d(TAG, "Clipboard content updated: $text")
+        _clipboardContent.value = text
     }
 
     override fun onBind(intent: Intent): IBinder? {
@@ -79,6 +88,7 @@ class SyncService : TileService(), LifecycleOwner {
 
         if (!Backend.isClipboardManagerInitialized()) {
             clipboardManager = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            _clipboardContent.value = clipboardManager.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
         }
 
         Backend.syncService = this
@@ -114,6 +124,7 @@ class SyncService : TileService(), LifecycleOwner {
         val action = {
             Log.d(TAG, "Tile clicked")
             toggleSyncStatus()
+            Unit
         }
 
         if (isLocked) {
@@ -139,14 +150,28 @@ class SyncService : TileService(), LifecycleOwner {
         }
     }
 
-    private fun toggleSyncStatus() {
+    private fun toggleSyncStatus(): Boolean {
+        if (syncStatus.value is SyncStatus.Connecting) {
+            Log.d(TAG, "Service already connecting")
+        }
         if (syncStatus.value is SyncStatus.Connected) {
-            Log.d(TAG, "Stopping sync")
             stopSyncService()
-        } else {
-            Log.d(TAG, "Starting sync")
+        }
+        if (syncStatus.value is SyncStatus.Error || syncStatus.value is SyncStatus.Disconnected) {
+            mqttConfig = MqttSetting()
+
+            if (mqttConfig.serverAddress.isEmpty()
+                || mqttConfig.topic.isEmpty()
+                || mqttConfig.secretKey.isEmpty()
+                || mqttConfig.port <= 0
+            ) {
+                Toast.makeText(this, this.getString(R.string.please_complete_configuration), Toast.LENGTH_SHORT).show()
+                return false
+            }
+
             startSyncService()
         }
+        return true
     }
 
     private fun startSyncService() {
@@ -178,7 +203,11 @@ class SyncService : TileService(), LifecycleOwner {
 
     private fun initializeSecurity() {
         mqttConfig = MqttSetting()
-
+        if (mqttConfig.secretKey.isEmpty()) {
+            Log.e(TAG, "MQTT配置错误: 密钥为空")
+            updateStatus(SyncStatus.Error("MQTT配置错误: 密钥为空"))
+            return
+        }
         // 初始化加密密钥
         val hash = MessageDigest.getInstance("SHA-256").digest(mqttConfig.secretKey.toByteArray())
         secretKeySpec = SecretKeySpec(hash, "AES")

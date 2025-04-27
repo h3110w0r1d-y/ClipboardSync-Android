@@ -1,5 +1,6 @@
 package com.h3110w0r1d.clipboardsync
 
+import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
 import de.robv.android.xposed.IXposedHookLoadPackage
@@ -20,19 +21,70 @@ class Hook : IXposedHookLoadPackage {
 
     override fun handleLoadPackage(lpparam: LoadPackageParam) {
         if (lpparam.packageName == PACKAGE_NAME) {
-            hook_self(lpparam)
+            hookSelf(lpparam)
         }
         else if (lpparam.packageName == "android") {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                hook_cs34(lpparam)
+                hookCS34(lpparam)
             } else {
-                hook_cs(lpparam)
+                hookCS(lpparam)
             }
-            hook_ams(lpparam)
+
+            hookAdj(lpparam)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                hookAMS30(lpparam)
+            } else {
+                hookAMS(lpparam)
+            }
         }
     }
 
-    private fun hook_self(lpparam: LoadPackageParam) {
+    private fun hookAMS(lpparam: LoadPackageParam) {
+        val clazz = findClass(
+            "com.android.server.am.ActivityManagerService",
+            lpparam.classLoader
+        )
+        hookAllMethods(
+            clazz,
+            "registerReceiver",
+            object : XC_MethodHook() {
+                @Throws(Throwable::class)
+                override fun beforeHookedMethod(param: MethodHookParam?) {
+                    super.beforeHookedMethod(param)
+                    val packageName = param?.args?.get(1) as String
+                    if (packageName != PACKAGE_NAME) {
+                        return
+                    }
+                    val intentFilter = param.args?.get(3) as IntentFilter
+                    intentFilter.addAction("com.h3110w0r1d.clipboardsync.MODULE_ACTIVE")
+                }
+            })
+    }
+
+    private fun hookAMS30(lpparam: LoadPackageParam) {
+        val clazz = findClass(
+            "com.android.server.am.ActivityManagerService",
+            lpparam.classLoader
+        )
+        hookAllMethods(
+            clazz,
+            "registerReceiverWithFeature",
+            object : XC_MethodHook() {
+                @Throws(Throwable::class)
+                override fun beforeHookedMethod(param: MethodHookParam?) {
+                    super.beforeHookedMethod(param)
+                    val packageName = param?.args?.get(1) as String
+                    if (packageName != PACKAGE_NAME) {
+                        return
+                    }
+                    val intentFilter = param.args?.get(5) as IntentFilter
+                    intentFilter.addAction("com.h3110w0r1d.clipboardsync.MODULE_ACTIVE")
+                }
+            })
+    }
+
+    private fun hookSelf(lpparam: LoadPackageParam) {
         val clazz = findClass(
             "com.h3110w0r1d.clipboardsync.utils.ModuleUtils",
             lpparam.classLoader
@@ -59,10 +111,8 @@ class Hook : IXposedHookLoadPackage {
             })
     }
 
-    private fun hook_ams(lpparam: LoadPackageParam) {
+    private fun hookAdj(lpparam: LoadPackageParam) {
         val clazz = findClass("com.android.server.am.ProcessList", lpparam.classLoader)
-        Log.d(LOG_TAG, "hookams: find class$clazz")
-
         hookAllMethods(
             clazz,
             "newProcessRecordLocked",
@@ -70,29 +120,21 @@ class Hook : IXposedHookLoadPackage {
                 @Throws(Throwable::class)
                 override fun afterHookedMethod(param: MethodHookParam) {
                     super.afterHookedMethod(param)
+                    if (param.result.toString().contains("system")) return
                     try {
-                        changeAppInfoForLockPackage(param.result)
-                    }catch (e:Throwable){
-                        Log.e(LOG_TAG, "newProcessRecordLocked" + e.stackTraceToString())
+                        val processName = param.result.get<String>("processName")
+                        if (processName != PACKAGE_NAME) return
+                        val mState = param.result.get<Any>("mState")
+                        callMethod(mState, "setMaxAdj", 0)
+                    } catch (e: Exception) {
+                        Log.e(LOG_TAG, "Failed to hook adj", e)
                     }
 
                 }
             })
     }
 
-    private fun changeAppInfoForLockPackage(processRecord: Any) {
-        if (processRecord.toString().contains("system")) return
-        try {
-            val processName = processRecord.get<String>("processName")
-            if (processName != PACKAGE_NAME) return
-            val mState = processRecord.get<Any>("mState")
-            callMethod(mState, "setMaxAdj", 0)
-        } catch (e: Exception) {
-            Log.e(LOG_TAG, "Failed to access mState field", e)
-        }
-    }
-
-    private fun hook_cs34(lpparam: LoadPackageParam) {
+    private fun hookCS34(lpparam: LoadPackageParam) {
         val clazz = findClass(
             "com.android.server.clipboard.ClipboardService",
             lpparam.classLoader
@@ -118,7 +160,7 @@ class Hook : IXposedHookLoadPackage {
             })
     }
 
-    private fun hook_cs(lpparam: LoadPackageParam) {
+    private fun hookCS(lpparam: LoadPackageParam) {
         val clazz = findClass(
             "com.android.server.clipboard.ClipboardService",
             lpparam.classLoader
@@ -146,14 +188,11 @@ class Hook : IXposedHookLoadPackage {
 
 inline fun <reified T> Any.get(field: String): T? {
     return try {
-        // 获取对象的 Class 对象
         val clazz = this.javaClass
-        // 获取字段对象，优先使用 declaredField，兼容 private/protected/public
         val declaredField = clazz.getDeclaredField(field)
-        declaredField.isAccessible = true // 设置可访问
-        declaredField.get(this) as T // 读取字段值并强制转换为 T
+        declaredField.isAccessible = true
+        declaredField.get(this) as T
     } catch (e: Exception) {
-        // 捕获异常并返回 null
         e.printStackTrace()
         null
     }

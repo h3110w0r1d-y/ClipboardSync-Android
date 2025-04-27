@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +59,8 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -69,7 +72,9 @@ import androidx.core.content.res.ResourcesCompat
 import androidx.core.graphics.createBitmap
 import androidx.core.net.toUri
 import com.h3110w0r1d.clipboardsync.R
+import com.h3110w0r1d.clipboardsync.entity.MqttSetting
 import com.h3110w0r1d.clipboardsync.service.SyncStatus
+import com.h3110w0r1d.clipboardsync.ui.uistate.MqttSettingUIState
 import com.h3110w0r1d.clipboardsync.utils.ModuleUtils.getModuleVersion
 import com.h3110w0r1d.clipboardsync.utils.ModuleUtils.isModuleEnabled
 import com.h3110w0r1d.clipboardsync.viewmodel.ClipboardViewModel
@@ -88,6 +93,16 @@ fun getAppIconBitmap(context: Context): Bitmap? {
 	}
 }
 
+fun withoutFontPadding(): TextStyle {
+	return Typography(
+		titleSmall = TextStyle(),
+	).titleSmall.copy(
+		platformStyle = PlatformTextStyle(
+			includeFontPadding = false,
+		)
+	)
+}
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun MainPage(viewModel: ClipboardViewModel) {
@@ -96,7 +111,6 @@ fun MainPage(viewModel: ClipboardViewModel) {
 	val showSettingsDialog = remember { mutableStateOf(false) }
 	val showAboutDialog = remember { mutableStateOf(false) }
 
-	val clipboardContent by viewModel.clipboardContent.collectAsState()
 	// 启动并绑定服务
 	LaunchedEffect(Unit) {
 		viewModel.bindService(context)
@@ -155,19 +169,21 @@ fun MainPage(viewModel: ClipboardViewModel) {
 			verticalArrangement = Arrangement.spacedBy(16.dp)
 		) {
 			ModuleCard(
-				onOpenLSP = { viewModel.openLsposedManager(context) }
+				viewModel
 			)
 			// 状态卡片
 			StatusCard(
 				viewModel,
 				onToggleSync = {
-					viewModel.toggleSync()
+					if (!viewModel.toggleSync()) {
+						showSettingsDialog.value = true
+					}
 				}
 			)
 
 			// 剪贴板内容卡片
 			ClipboardContentCard(
-				content = clipboardContent,
+				viewModel = viewModel,
 				onSync = { viewModel.syncClipboardContent() }
 			)
 		}
@@ -185,8 +201,11 @@ fun MainPage(viewModel: ClipboardViewModel) {
 
 @Composable
 fun ModuleCard(
-	onOpenLSP: () -> Unit
+	viewModel: ClipboardViewModel
 ) {
+	val context = LocalContext.current
+	val moduleActive by viewModel.moduleActive
+
 	var moduleStatus = stringResource(R.string.module_inactivated)
 	var cardBackground = MaterialTheme.colorScheme.error
 	var textColor = MaterialTheme.colorScheme.onError
@@ -203,7 +222,7 @@ fun ModuleCard(
 	Card(
 		colors = cardColors(containerColor = cardBackground),
 		modifier = Modifier.fillMaxWidth(),
-		onClick = onOpenLSP
+		onClick = { viewModel.openLSPosedManager(context) },
 	) {
 		Row (
 			verticalAlignment = Alignment.CenterVertically,
@@ -212,23 +231,28 @@ fun ModuleCard(
 				imageVector = iconVector,
 				contentDescription = null,
 				modifier = Modifier
-					.padding(24.dp)
+					.padding(26.dp, 32.dp)
 					.size(24.dp)
 					.rotate(deg),
-				tint = textColor
+				tint = textColor,
 			)
 			Column {
 				Text(
 					text = moduleStatus,
 					fontSize = 16.sp,
 					fontWeight = FontWeight.Medium,
-					color = textColor
+					color = textColor,
+//					style = withoutFontPadding(),
 				)
 				if (isModuleEnabled())
 				Text(
-					text = "Xposed API Version: " + getModuleVersion(),
+					text = if (moduleActive)
+						"Xposed API Version: " + getModuleVersion()
+					else
+						stringResource(R.string.please_restart_system),
 					fontSize = 12.sp,
-					color = textColor
+					color = textColor,
+					style = withoutFontPadding(),
 				)
 			}
 		}
@@ -242,12 +266,14 @@ fun StatusCard(
 ) {
 	val syncStatus by viewModel.syncStatus.collectAsState()
 	val isBound by viewModel.isBound
-	val deviceId by viewModel.deviceId.collectAsState()
-
+	val deviceId by viewModel.deviceId
 	LaunchedEffect(isBound) {
 		if (isBound) {
 			viewModel.serviceBinder?.getStatusFlow()?.collect { status ->
 				viewModel.updateSyncStatus(status)
+			}
+			viewModel.serviceBinder?.getClipboardContent()?.collect {
+				viewModel.updateClipboardContent(it)
 			}
 		}
 	}
@@ -274,7 +300,7 @@ fun StatusCard(
 				},
 				contentDescription = null,
 				modifier = Modifier
-					.padding(24.dp)
+					.padding(26.dp, 32.dp)
 					.size(24.dp)
 					.rotate(when (syncStatus) {
 						is SyncStatus.Connecting -> 90f
@@ -288,7 +314,9 @@ fun StatusCard(
 					else -> MaterialTheme.colorScheme.onSurface
 				}
 			)
-			Column {
+			Column (
+				verticalArrangement = Arrangement.spacedBy(0.dp),
+			) {
 				Text(
 					text = when (syncStatus) {
 						is SyncStatus.Connected -> stringResource(R.string.connected)
@@ -297,22 +325,28 @@ fun StatusCard(
 						else -> stringResource(R.string.disconnect)
 					},
 					fontWeight = FontWeight.Medium,
+					fontSize = 16.sp,
 					color = when(syncStatus) {
 						is SyncStatus.Connected -> MaterialTheme.colorScheme.onPrimary
 						is SyncStatus.Connecting -> MaterialTheme.colorScheme.onPrimaryContainer
 						is SyncStatus.Error -> MaterialTheme.colorScheme.onError
 						else -> MaterialTheme.colorScheme.onSurface
-					}
+					},
+//					style = withoutFontPadding(),
 				)
 				Text(
-					text = "${stringResource(R.string.device_id)}: $deviceId",
+					text = when(syncStatus) {
+						is SyncStatus.Error -> (syncStatus as SyncStatus.Error).message
+						else -> "${stringResource(R.string.device_id)}: $deviceId"
+					},
 					fontSize = 12.sp,
 					color = when(syncStatus) {
 						is SyncStatus.Connected -> MaterialTheme.colorScheme.onPrimary
 						is SyncStatus.Connecting -> MaterialTheme.colorScheme.onPrimaryContainer
 						is SyncStatus.Error -> MaterialTheme.colorScheme.onError
 						else -> MaterialTheme.colorScheme.onSurface
-					}
+					},
+					style = withoutFontPadding(),
 				)
 			}
 		}
@@ -321,9 +355,19 @@ fun StatusCard(
 
 @Composable
 fun ClipboardContentCard(
-	content: String,
+	viewModel: ClipboardViewModel,
 	onSync: () -> Unit
 ) {
+	val isBound by viewModel.isBound
+	val clipboardContent by viewModel.clipboardContent
+
+	LaunchedEffect(isBound) {
+		if (isBound) {
+			viewModel.serviceBinder?.getClipboardContent()?.collect {
+				viewModel.updateClipboardContent(it)
+			}
+		}
+	}
 	Card(
 		modifier = Modifier.fillMaxWidth(),
 		elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -335,7 +379,7 @@ fun ClipboardContentCard(
 		) {
 			Text(
 				text = stringResource(R.string.clipboard_content),
-				fontSize = 14.sp,
+				fontSize = 16.sp,
 				color = MaterialTheme.colorScheme.onSurfaceVariant
 			)
 
@@ -348,8 +392,9 @@ fun ClipboardContentCard(
 				border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
 			) {
 				Text(
-					text = content,
-					modifier = Modifier.padding(12.dp)
+					text = clipboardContent,
+					modifier = Modifier.padding(8.dp),
+					fontSize = 14.sp,
 				)
 			}
 
@@ -374,7 +419,7 @@ fun SettingsDialog(
 	viewModel: ClipboardViewModel,
 	onDismiss: () -> Unit
 ) {
-	val uiState = viewModel.mqttSettingUIState
+	val uiState = MqttSettingUIState(MqttSetting())
 
 	Dialog(onDismissRequest = onDismiss) {
 		Surface(
@@ -481,7 +526,7 @@ fun SettingsDialog(
 					Spacer(modifier = Modifier.width(8.dp))
 
 					Button(onClick = {
-						viewModel.saveSetting()
+						viewModel.saveSetting(uiState)
 						onDismiss()
 					}) {
 						Text(stringResource(R.string.save))
