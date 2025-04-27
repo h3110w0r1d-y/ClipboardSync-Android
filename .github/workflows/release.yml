@@ -27,9 +27,8 @@ jobs:
           keyPassword: ${{ secrets.KEY_PASSWORD }}
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
-      - run: mv ${{steps.sign_app.outputs.signedReleaseFile}} ClipboardSync_$GITHUB_REF_NAME.apk
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: "*.apk"
+          artifacts: "app/build/outputs/apk/release/*-signed.apk"
           token: ${{ github.token }}
           generateReleaseNotes: true

@@ -35,6 +35,17 @@ android {
         }
     }
 
+    applicationVariants.all {
+        val variant = this
+        if (variant.buildType.name == "release")
+            variant.outputs.map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
+                .forEach { output ->
+                    val abi = output.getFilter(com.android.build.OutputFile.ABI) ?: "universal"
+                    val apkName = "cs-${defaultConfig.versionName}-${abi}-${variant.buildType.name}.apk"
+                    output.outputFileName = apkName
+                }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
